@@ -270,4 +270,123 @@ export const LIBRARY: ProgressionPreset[] = [
       c('Cmaj7', 2),
     ]),
   },
+
+  // --- More Blues ----------------------------------------------------------
+  {
+    id: 'bird-blues-f',
+    name: 'Bird Blues (F)',
+    category: 'Blues',
+    bpm: 150,
+    timeSignature: FOUR_FOUR,
+    sections: one('12-bar', [
+      c('Fmaj7'),
+      c('Em7b5'),
+      c('A7'),
+      c('Dm7'),
+      c('G7'),
+      c('Cm7'),
+      c('F7'),
+      c('Bb7'),
+      c('Bbm7'),
+      c('Eb7'),
+      c('Am7'),
+      c('D7'),
+    ]),
+  },
+
+  // --- More Rhythm Changes -------------------------------------------------
+  {
+    id: 'rhythm-changes-b',
+    name: 'Rhythm Changes — Bridge (B♭)',
+    category: 'Rhythm Changes',
+    bpm: 160,
+    timeSignature: FOUR_FOUR,
+    sections: one('B', [c('D7', 2), c('G7', 2), c('C7', 2), c('F7', 2)]),
+  },
+
+  // --- More Modal ----------------------------------------------------------
+  {
+    id: 'cantaloupe-island',
+    name: 'Cantaloupe Island',
+    category: 'Modal',
+    bpm: 110,
+    timeSignature: FOUR_FOUR,
+    sections: one('vamp', [c('Fm7', 4), c('Db7', 4), c('Dm7', 4), c('Fm7', 4)]),
+  },
+
+  // --- More Latin / Bossa --------------------------------------------------
+  {
+    id: 'ipanema-a',
+    name: 'The Girl from Ipanema — A (F)',
+    category: 'Latin / Bossa',
+    bpm: 130,
+    timeSignature: FOUR_FOUR,
+    sections: one('A', [
+      c('Fmaj7', 2),
+      c('G7', 2),
+      c('Gm7'),
+      c('Gb7'),
+      c('Fmaj7', 2),
+    ]),
+  },
+  {
+    id: 'black-orpheus-a',
+    name: 'Black Orpheus — A (Am)',
+    category: 'Latin / Bossa',
+    bpm: 140,
+    timeSignature: FOUR_FOUR,
+    sections: one('A', [
+      c('Am7'),
+      c('Bm7b5'),
+      c('E7'),
+      c('Am7'),
+      c('Dm7'),
+      c('Bm7b5'),
+      c('E7'),
+      c('Am7'),
+    ]),
+  },
+
+  // --- More Standards ------------------------------------------------------
+  {
+    id: 'all-of-me',
+    name: 'All of Me — A (C)',
+    category: 'Standards',
+    bpm: 140,
+    timeSignature: FOUR_FOUR,
+    sections: one('A', [c('Cmaj7', 2), c('E7', 2), c('A7', 2), c('Dm7', 2)]),
+  },
+  {
+    id: 'summertime',
+    name: 'Summertime — A (Am)',
+    category: 'Standards',
+    bpm: 100,
+    timeSignature: FOUR_FOUR,
+    sections: one('A', [
+      c('Am7'),
+      c('Em7'),
+      c('Am7'),
+      c('Em7'),
+      c('Am7'),
+      c('Dm7'),
+      c('E7', 2),
+    ]),
+  },
+  {
+    id: 'misty-a',
+    name: 'Misty — A (E♭)',
+    category: 'Standards',
+    bpm: 100,
+    timeSignature: FOUR_FOUR,
+    sections: one('A', [
+      c('Ebmaj7'),
+      c('Bbm7'),
+      c('Eb7'),
+      c('Abmaj7'),
+      c('Abm7'),
+      c('Db7'),
+      c('Ebmaj7'),
+      c('C7'),
+    ]),
+  },
 ]

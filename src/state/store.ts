@@ -5,12 +5,15 @@
 //
 // Progressions are seeded from the built-in library (see data/presets.ts);
 // loadPreset() swaps in a preset's tempo, meter, and changes while preserving
-// the user's sound, drone, and trainer preferences.
+// the user's sound, drone, and trainer preferences. The whole working song is
+// silently auto-saved to localStorage (debounced, while stopped) and restored
+// on startup — see the subscription at the bottom of this file.
 
 import { create } from 'zustand'
 import { audioEngine } from '../audio/AudioEngine'
 import { START_POSITION, type BeatPosition } from '../audio/transport'
 import type { ProgressionPreset } from '../data/presets'
+import { loadSong, saveSong } from '../persistence/songStorage'
 import { newId } from './ids'
 import {
   MAX_BPM,
@@ -79,6 +82,7 @@ export function clampBpm(n: number): number {
 }
 
 interface AppState {
+  songId: string
   name: string
   bpm: number
   timeSignature: TimeSignature
@@ -155,7 +159,7 @@ export const useStore = create<AppState>((set, get) => {
   audioEngine.onBpm((bpm) => set({ bpm }))
   audioEngine.onChord((currentChord) => set({ currentChord }))
 
-  const initial = defaultSong()
+  const initial = loadSong() ?? defaultSong()
   // Prime the engine from the initial song.
   audioEngine.setBpm(initial.bpm)
   audioEngine.setTimeSignature(initial.timeSignature)
@@ -166,6 +170,7 @@ export const useStore = create<AppState>((set, get) => {
   audioEngine.setProgression(initial.sections)
 
   return {
+    songId: initial.id,
     name: initial.name,
     bpm: initial.bpm,
     timeSignature: initial.timeSignature,
@@ -295,6 +300,7 @@ export const useStore = create<AppState>((set, get) => {
       audioEngine.setConfig(metronome)
       audioEngine.setProgression(sections)
       set({
+        songId: newId(),
         name: preset.name,
         bpm: preset.bpm,
         timeSignature: preset.timeSignature,
@@ -306,4 +312,29 @@ export const useStore = create<AppState>((set, get) => {
       })
     },
   }
+})
+
+/** Build the persistable Song from the current store state. */
+function toSong(s: AppState): Song {
+  return {
+    id: s.songId,
+    name: s.name,
+    bpm: s.bpm,
+    timeSignature: s.timeSignature,
+    metronome: s.metronome,
+    gapTrainer: s.gapTrainer,
+    tempoAutomation: s.tempoAutomation,
+    drone: s.drone,
+    sections: s.sections,
+  }
+}
+
+// Silently auto-save the working song (debounced). We skip saving while playing:
+// transient position/tempo updates fire constantly, and tempo automation would
+// otherwise persist an inflated BPM (it resets to base on stop).
+let saveTimer: ReturnType<typeof setTimeout> | undefined
+useStore.subscribe((state) => {
+  if (state.isPlaying) return
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => saveSong(toSong(state)), 400)
 })
