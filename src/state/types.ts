@@ -165,3 +165,12 @@ export function defaultTempoAutomation(): TempoAutomation {
     maxBpm: 200,
   }
 }
+
+export function defaultDroneConfig(): DroneConfig {
+  return {
+    enabled: false,
+    register: 'mid',
+    waveform: 'sawtooth',
+    volume: 0.3,
+  }
+}

@@ -11,14 +11,18 @@
 // are muted. React never imports Web Audio directly — it talks to this engine.
 
 import {
+  defaultDroneConfig,
   defaultGapTrainer,
   defaultMetronomeConfig,
   defaultTempoAutomation,
+  type DroneConfig,
   type GapTrainer,
   type MetronomeConfig,
   type TempoAutomation,
   type TimeSignature,
 } from '../state/types'
+import { voiceChordSymbol } from './chordEngine'
+import { DroneVoices } from './DroneVoices'
 import {
   frequencyForAccent,
   gainForAccent,
@@ -68,6 +72,9 @@ export class AudioEngine {
   private config: MetronomeConfig = defaultMetronomeConfig(4)
   private gapTrainer: GapTrainer = defaultGapTrainer()
   private tempoAutomation: TempoAutomation = defaultTempoAutomation()
+  private droneConfig: DroneConfig = defaultDroneConfig()
+  private droneVoices: DroneVoices | null = null
+  private currentChord: string | null = null
 
   private cursor: BeatPosition = START_POSITION
   private displayPos: BeatPosition = START_POSITION
@@ -127,9 +134,43 @@ export class AudioEngine {
     this.tempoAutomation = automation
   }
 
-  async start(): Promise<void> {
-    if (this.playing) return
+  setDroneConfig(config: DroneConfig): void {
+    const prev = this.droneConfig
+    this.droneConfig = config
+    // Enabling the drone is a user gesture, so it's safe to spin up the context.
+    if (config.enabled) {
+      this.ensureContext()
+      void this.ctx?.resume()
+    }
+    if (this.droneVoices) {
+      this.droneVoices.setWaveform(config.waveform)
+      this.droneVoices.setVolume(config.volume)
+      this.droneVoices.setEnabled(config.enabled)
+    }
+    if (config.register !== prev.register) this.applyChord()
+  }
 
+  /** Set the chord the drone should sound (a symbol like "Cmaj7", or null). */
+  setChord(symbol: string | null): void {
+    this.currentChord = symbol
+    this.applyChord()
+  }
+
+  private applyChord(): void {
+    if (!this.droneVoices) return
+    if (!this.currentChord) {
+      this.droneVoices.setFrequencies([])
+      return
+    }
+    const voiced = voiceChordSymbol(this.currentChord, this.droneConfig.register)
+    this.droneVoices.setFrequencies(voiced.valid ? voiced.frequencies : [])
+  }
+
+  /**
+   * Lazily create the AudioContext and Web Audio graph. Must be called from a
+   * user gesture (Play, or enabling the drone) so the context isn't suspended.
+   */
+  private ensureContext(): AudioContext {
     if (!this.ctx) {
       const Ctor: AudioContextCtor =
         window.AudioContext ??
@@ -139,8 +180,20 @@ export class AudioEngine {
       this.master = this.ctx.createGain()
       this.master.gain.value = 1
       this.master.connect(this.ctx.destination)
+      this.droneVoices = new DroneVoices(this.ctx, this.master)
+      this.droneVoices.setWaveform(this.droneConfig.waveform)
+      this.droneVoices.setVolume(this.droneConfig.volume)
+      this.droneVoices.setEnabled(this.droneConfig.enabled)
+      this.applyChord()
     }
-    await this.ctx.resume()
+    return this.ctx
+  }
+
+  async start(): Promise<void> {
+    if (this.playing) return
+
+    const ctx = this.ensureContext()
+    await ctx.resume()
 
     if (!this.worker) {
       this.worker = new Worker(
@@ -156,7 +209,7 @@ export class AudioEngine {
     this.displayMuted = false
     this.bpm = this.baseBpm
     this.queue = []
-    this.nextNoteTime = this.ctx.currentTime + FIRST_NOTE_DELAY
+    this.nextNoteTime = ctx.currentTime + FIRST_NOTE_DELAY
     this.playing = true
     this.fireBpm()
     this.worker.postMessage({ type: 'start', interval: WORKER_INTERVAL })

@@ -9,11 +9,13 @@ import { START_POSITION, type BeatPosition } from '../audio/transport'
 import {
   MAX_BPM,
   MIN_BPM,
+  defaultDroneConfig,
   defaultGapTrainer,
   defaultMetronomeConfig,
   defaultTempoAutomation,
   resizeAccents,
   type AccentLevel,
+  type DroneConfig,
   type GapTrainer,
   type MetronomeConfig,
   type TempoAutomation,
@@ -35,6 +37,9 @@ interface AppState {
   metronome: MetronomeConfig
   gapTrainer: GapTrainer
   tempoAutomation: TempoAutomation
+  drone: DroneConfig
+  /** Manually-set chord for the drone (Phase 4 replaces this with the progression). */
+  chord: string
   isPlaying: boolean
   position: BeatPosition
   /** Whether the current bar's click is muted by the gap trainer. */
@@ -52,12 +57,15 @@ interface AppState {
   setSubdivisionVolume: (v: number) => void
   updateGapTrainer: (patch: Partial<GapTrainer>) => void
   updateTempoAutomation: (patch: Partial<TempoAutomation>) => void
+  updateDrone: (patch: Partial<DroneConfig>) => void
+  setChord: (symbol: string) => void
 }
 
 export const useStore = create<AppState>((set, get) => {
   const initialConfig = defaultMetronomeConfig(INITIAL_TS.beatsPerBar)
   const initialGap = defaultGapTrainer()
   const initialTempo = defaultTempoAutomation()
+  const initialDrone = defaultDroneConfig()
 
   // Prime the engine with the initial config and wire updates back.
   audioEngine.setBpm(INITIAL_BPM)
@@ -65,6 +73,7 @@ export const useStore = create<AppState>((set, get) => {
   audioEngine.setConfig(initialConfig)
   audioEngine.setGapTrainer(initialGap)
   audioEngine.setTempoAutomation(initialTempo)
+  audioEngine.setDroneConfig(initialDrone)
   audioEngine.onPosition((position, isPlaying, barMuted) =>
     set({ position, isPlaying, barMuted }),
   )
@@ -82,6 +91,8 @@ export const useStore = create<AppState>((set, get) => {
     metronome: initialConfig,
     gapTrainer: initialGap,
     tempoAutomation: initialTempo,
+    drone: initialDrone,
+    chord: '',
     isPlaying: false,
     position: START_POSITION,
     barMuted: false,
@@ -129,6 +140,17 @@ export const useStore = create<AppState>((set, get) => {
       const tempoAutomation = { ...get().tempoAutomation, ...patch }
       audioEngine.setTempoAutomation(tempoAutomation)
       set({ tempoAutomation })
+    },
+
+    updateDrone: (patch) => {
+      const drone = { ...get().drone, ...patch }
+      audioEngine.setDroneConfig(drone)
+      set({ drone })
+    },
+
+    setChord: (symbol) => {
+      audioEngine.setChord(symbol.trim() === '' ? null : symbol)
+      set({ chord: symbol })
     },
   }
 })
