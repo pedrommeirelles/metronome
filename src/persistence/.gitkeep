@@ -1,0 +1,1 @@
+# Persistence: save/load a Song to localStorage (JSON). IndexedDB later if setlists arrive.

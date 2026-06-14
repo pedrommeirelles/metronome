@@ -1,0 +1,2 @@
+# Audio engine: AudioEngine class, scheduler Web Worker, click sound bank, chordEngine.
+# Framework-agnostic (no React imports) — owns the AudioContext and Web Audio graph.
