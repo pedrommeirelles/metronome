@@ -22,6 +22,13 @@ export interface MetronomeConfig {
   accents: AccentLevel[]
   /** Notes per beat: 1 = quarter, 2 = eighth, 3 = triplet, 4 = sixteenth. */
   subdivision: number
+  /**
+   * Swing amount (0..1) applied to eighth-note subdivisions: 0 = straight,
+   * 1 = full triplet feel. Only affects subdivision === 2.
+   */
+  swing: number
+  /** Bars of count-in before playback starts (0 = off). */
+  countInBars: number
   /** Id of the click sound from the sound bank. */
   soundId: string
   /** Relative level (0..1) of subdivision ticks vs. the main beat. */
@@ -141,6 +148,8 @@ export function defaultMetronomeConfig(beatsPerBar: number): MetronomeConfig {
   return {
     accents: defaultAccents(beatsPerBar),
     subdivision: 1,
+    swing: 0,
+    countInBars: 0,
     soundId: 'beep',
     subdivisionVolume: 0.5,
     volume: 0.8,

@@ -10,6 +10,8 @@ const sample: Song = {
   metronome: {
     accents: ['strong', 'normal', 'soft', 'normal'],
     subdivision: 2,
+    swing: 0.5,
+    countInBars: 1,
     soundId: 'woodblock',
     subdivisionVolume: 0.5,
     volume: 0.8,

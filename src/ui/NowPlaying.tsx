@@ -14,6 +14,21 @@ export function NowPlaying() {
   const barCount = useStore((s) => s.position.barCount)
 
   const timeline = useMemo(() => buildTimeline(sections), [sections])
+
+  // Negative bar = count-in (before the progression starts).
+  if (barCount < 0) {
+    return (
+      <div className="flex flex-col items-center gap-1">
+        <span className="text-xs uppercase tracking-widest text-zinc-500">
+          Count-in
+        </span>
+        <span className="text-5xl font-bold tracking-tight text-zinc-500">
+          {-barCount}
+        </span>
+      </div>
+    )
+  }
+
   if (timeline.totalBars === 0) {
     return (
       <div className="text-center text-zinc-600">

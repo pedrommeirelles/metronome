@@ -32,9 +32,29 @@ export function secondsPerBeat(bpm: number): number {
   return 60 / bpm
 }
 
-/** Seconds between consecutive subdivision ticks. */
+/** Seconds between consecutive subdivision ticks (even spacing). */
 export function secondsPerSubdivision(bpm: number, subdivision: number): number {
   return secondsPerBeat(bpm) / subdivision
+}
+
+/**
+ * Seconds from the tick at `subInBeat` to the next one, applying swing to
+ * eighth-note subdivisions. Swing (0..1) delays the off-beat: 0 = straight
+ * (50/50), 1 = full triplet feel (≈67/33). Only affects subdivision === 2;
+ * other subdivisions stay evenly spaced.
+ */
+export function subdivisionInterval(
+  bpm: number,
+  subdivision: number,
+  subInBeat: number,
+  swing: number,
+): number {
+  const beat = secondsPerBeat(bpm)
+  if (subdivision === 2 && swing > 0) {
+    const ratio = 0.5 + swing * (2 / 3 - 0.5) // 0.5 → straight, 1 → 2/3
+    return subInBeat === 0 ? beat * ratio : beat * (1 - ratio)
+  }
+  return beat / subdivision
 }
 
 /**

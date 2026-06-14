@@ -40,8 +40,8 @@ import {
   advancePosition,
   isBeat,
   isDownbeat,
-  secondsPerSubdivision,
   START_POSITION,
+  subdivisionInterval,
   type BeatPosition,
 } from './transport'
 import { isBarMutedFixed, tempoForBar } from './trainers'
@@ -135,7 +135,7 @@ export class AudioEngine {
   setBpm(bpm: number): void {
     this.baseBpm = bpm
     this.bpm = this.playing
-      ? tempoForBar(bpm, this.cursor.barCount, this.tempoAutomation)
+      ? tempoForBar(bpm, Math.max(0, this.cursor.barCount), this.tempoAutomation)
       : bpm
     this.fireBpm()
   }
@@ -234,8 +234,10 @@ export class AudioEngine {
       this.worker.onmessage = () => this.schedule()
     }
 
-    this.cursor = START_POSITION
-    this.displayPos = START_POSITION
+    // Negative bars are the count-in; real playback begins at bar 0.
+    const countIn = Math.max(0, Math.floor(this.config.countInBars))
+    this.cursor = { barCount: -countIn, beatInBar: 0, subInBeat: 0 }
+    this.displayPos = this.cursor
     this.currentBarMuted = false
     this.displayMuted = false
     this.droneSymbol = null // force the first bar to (re)voice the drone
@@ -286,9 +288,11 @@ export class AudioEngine {
         muted: this.currentBarMuted,
         symbol: this.currentBarSymbol,
       })
-      this.nextNoteTime += secondsPerSubdivision(
+      this.nextNoteTime += subdivisionInterval(
         this.bpm,
         this.config.subdivision,
+        this.cursor.subInBeat,
+        this.config.swing,
       )
       this.cursor = advancePosition(
         this.cursor,
@@ -300,15 +304,22 @@ export class AudioEngine {
 
   /** Apply per-bar effects (tempo automation, gap mute, chord change) at a bar. */
   private enterBar(barIndex: number, time: number): void {
-    const effective = tempoForBar(this.baseBpm, barIndex, this.tempoAutomation)
+    // During the count-in (negative bars), hold base tempo and don't mute; the
+    // drone holds the first chord so you hear the tonality before you start.
+    const countingIn = barIndex < 0
+    const lookupBar = Math.max(0, barIndex)
+
+    const effective = countingIn
+      ? this.baseBpm
+      : tempoForBar(this.baseBpm, barIndex, this.tempoAutomation)
     if (effective !== this.bpm) {
       this.bpm = effective
       this.fireBpm()
     }
-    this.currentBarMuted = this.decideMute(barIndex)
+    this.currentBarMuted = countingIn ? false : this.decideMute(barIndex)
 
     // Drive the drone from the progression; schedule the change at the bar time.
-    const symbol = chordAtBar(this.timeline, barIndex)?.symbol ?? null
+    const symbol = chordAtBar(this.timeline, lookupBar)?.symbol ?? null
     this.currentBarSymbol = symbol
     if (symbol !== this.droneSymbol) {
       this.droneSymbol = symbol

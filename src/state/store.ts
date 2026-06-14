@@ -109,6 +109,8 @@ interface AppState {
   setSoundId: (id: string) => void
   setVolume: (v: number) => void
   setSubdivisionVolume: (v: number) => void
+  setSwing: (v: number) => void
+  setCountInBars: (n: number) => void
   updateGapTrainer: (patch: Partial<GapTrainer>) => void
   updateTempoAutomation: (patch: Partial<TempoAutomation>) => void
   updateDrone: (patch: Partial<DroneConfig>) => void
@@ -218,6 +220,8 @@ export const useStore = create<AppState>((set, get) => {
     setSoundId: (id) => applyConfig({ soundId: id }),
     setVolume: (v) => applyConfig({ volume: v }),
     setSubdivisionVolume: (v) => applyConfig({ subdivisionVolume: v }),
+    setSwing: (v) => applyConfig({ swing: Math.max(0, Math.min(1, v)) }),
+    setCountInBars: (n) => applyConfig({ countInBars: Math.max(0, Math.round(n)) }),
 
     updateGapTrainer: (patch) => {
       const gapTrainer = { ...get().gapTrainer, ...patch }

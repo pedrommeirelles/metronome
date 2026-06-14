@@ -38,6 +38,8 @@ export function MetronomePanel() {
   const setSoundId = useStore((s) => s.setSoundId)
   const setVolume = useStore((s) => s.setVolume)
   const setSubdivisionVolume = useStore((s) => s.setSubdivisionVolume)
+  const setSwing = useStore((s) => s.setSwing)
+  const setCountInBars = useStore((s) => s.setCountInBars)
 
   return (
     <div className="grid w-full max-w-xl grid-cols-2 gap-4 rounded-2xl bg-zinc-900 p-5 sm:grid-cols-3">
@@ -110,6 +112,31 @@ export function MetronomePanel() {
           onChange={(e) => setSubdivisionVolume(Number(e.target.value))}
           className="accent-emerald-500"
         />
+      </Field>
+
+      <Field label={`Swing ${Math.round(metronome.swing * 100)}%`}>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={metronome.swing}
+          onChange={(e) => setSwing(Number(e.target.value))}
+          className="accent-emerald-500"
+          title="Swings the eighth-note subdivision (set Subdivision to Eighth)"
+        />
+      </Field>
+
+      <Field label="Count-in">
+        <select
+          className={selectClass}
+          value={metronome.countInBars}
+          onChange={(e) => setCountInBars(Number(e.target.value))}
+        >
+          <option value={0}>Off</option>
+          <option value={1}>1 bar</option>
+          <option value={2}>2 bars</option>
+        </select>
       </Field>
     </div>
   )

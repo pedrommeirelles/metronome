@@ -6,6 +6,7 @@ import {
   secondsPerBeat,
   secondsPerSubdivision,
   START_POSITION,
+  subdivisionInterval,
   type BeatPosition,
 } from './transport'
 
@@ -19,6 +20,26 @@ describe('secondsPerBeat / secondsPerSubdivision', () => {
     expect(secondsPerSubdivision(120, 1)).toBeCloseTo(0.5)
     expect(secondsPerSubdivision(120, 2)).toBeCloseTo(0.25)
     expect(secondsPerSubdivision(120, 4)).toBeCloseTo(0.125)
+  })
+})
+
+describe('subdivisionInterval (swing)', () => {
+  it('is even when swing is 0', () => {
+    expect(subdivisionInterval(120, 2, 0, 0)).toBeCloseTo(0.25)
+    expect(subdivisionInterval(120, 2, 1, 0)).toBeCloseTo(0.25)
+  })
+
+  it('delays the off-beat with swing, preserving the beat length', () => {
+    const onBeat = subdivisionInterval(120, 2, 0, 1) // beat = 0.5s
+    const offBeat = subdivisionInterval(120, 2, 1, 1)
+    expect(onBeat).toBeCloseTo(0.5 * (2 / 3)) // ~0.333
+    expect(offBeat).toBeCloseTo(0.5 * (1 / 3)) // ~0.167
+    expect(onBeat + offBeat).toBeCloseTo(secondsPerBeat(120))
+  })
+
+  it('ignores swing for non-eighth subdivisions', () => {
+    expect(subdivisionInterval(120, 4, 1, 1)).toBeCloseTo(0.125)
+    expect(subdivisionInterval(120, 3, 1, 1)).toBeCloseTo(0.5 / 3)
   })
 })
 

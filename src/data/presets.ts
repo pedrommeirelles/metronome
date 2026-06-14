@@ -389,4 +389,105 @@ export const LIBRARY: ProgressionPreset[] = [
       c('C7'),
     ]),
   },
+
+  // --- More keys -----------------------------------------------------------
+  {
+    id: 'major-ii-v-i-f',
+    name: 'Major ii–V–I (F)',
+    category: 'ii–V–I & Turnarounds',
+    bpm: 120,
+    timeSignature: FOUR_FOUR,
+    sections: one('ii–V–I', [c('Gm7', 2), c('C7', 2), c('Fmaj7', 4)]),
+  },
+  {
+    id: 'minor-ii-v-i-am',
+    name: 'Minor ii–V–i (Am)',
+    category: 'ii–V–I & Turnarounds',
+    bpm: 120,
+    timeSignature: FOUR_FOUR,
+    sections: one('ii–V–i', [c('Bm7b5', 2), c('E7', 2), c('Am7', 4)]),
+  },
+  {
+    id: 'blues-g',
+    name: 'Blues in G',
+    category: 'Blues',
+    bpm: 110,
+    timeSignature: FOUR_FOUR,
+    sections: one('12-bar', [
+      c('G7', 4),
+      c('C7', 2),
+      c('G7', 2),
+      c('D7', 1),
+      c('C7', 1),
+      c('G7', 2),
+    ]),
+  },
+
+  // --- Full forms (AABA) ---------------------------------------------------
+  {
+    id: 'rhythm-changes-full',
+    name: 'Rhythm Changes — Full (B♭)',
+    category: 'Rhythm Changes',
+    bpm: 160,
+    timeSignature: FOUR_FOUR,
+    sections: [
+      {
+        name: 'A',
+        repeats: 2,
+        chords: [
+          c('Bb6'),
+          c('G7'),
+          c('Cm7'),
+          c('F7'),
+          c('Dm7'),
+          c('G7'),
+          c('Cm7'),
+          c('F7'),
+        ],
+      },
+      {
+        name: 'B',
+        repeats: 1,
+        chords: [c('D7', 2), c('G7', 2), c('C7', 2), c('F7', 2)],
+      },
+      {
+        name: 'A',
+        repeats: 1,
+        chords: [
+          c('Bb6'),
+          c('G7'),
+          c('Cm7'),
+          c('F7'),
+          c('Dm7'),
+          c('G7'),
+          c('Cm7'),
+          c('F7'),
+        ],
+      },
+    ],
+  },
+  {
+    id: 'a-train-full',
+    name: 'Take the A Train — Full (C)',
+    category: 'Standards',
+    bpm: 160,
+    timeSignature: FOUR_FOUR,
+    sections: [
+      {
+        name: 'A',
+        repeats: 2,
+        chords: [c('Cmaj7', 2), c('D7', 2), c('Dm7'), c('G7'), c('Cmaj7', 2)],
+      },
+      {
+        name: 'B',
+        repeats: 1,
+        chords: [c('Fmaj7', 4), c('D7', 2), c('Dm7'), c('G7')],
+      },
+      {
+        name: 'A',
+        repeats: 1,
+        chords: [c('Cmaj7', 2), c('D7', 2), c('Dm7'), c('G7'), c('Cmaj7', 2)],
+      },
+    ],
+  },
 ]

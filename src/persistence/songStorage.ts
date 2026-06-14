@@ -91,6 +91,8 @@ function coerceSong(raw: unknown): Song | null {
     metronome: {
       accents: resizeAccents(rawAccents, beatsPerBar),
       subdivision: clampInt(m.subdivision, 1, 4, base.subdivision),
+      swing: Math.max(0, Math.min(1, num(m.swing, base.swing))),
+      countInBars: clampInt(m.countInBars, 0, 8, base.countInBars),
       soundId: str(m.soundId, base.soundId),
       subdivisionVolume: num(m.subdivisionVolume, base.subdivisionVolume),
       volume: num(m.volume, base.volume),
