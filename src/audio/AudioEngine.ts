@@ -18,9 +18,16 @@ import {
   type DroneConfig,
   type GapTrainer,
   type MetronomeConfig,
+  type Section,
   type TempoAutomation,
   type TimeSignature,
 } from '../state/types'
+import {
+  buildTimeline,
+  chordAtBar,
+  EMPTY_TIMELINE,
+  type Timeline,
+} from '../state/progression'
 import { voiceChordSymbol } from './chordEngine'
 import { DroneVoices } from './DroneVoices'
 import {
@@ -49,11 +56,13 @@ export type PositionListener = (
   muted: boolean,
 ) => void
 export type BpmListener = (bpm: number) => void
+export type ChordListener = (symbol: string | null) => void
 
 interface ScheduledNote {
   position: BeatPosition
   time: number
   muted: boolean
+  symbol: string | null
 }
 
 type AudioContextCtor = typeof AudioContext
@@ -74,17 +83,22 @@ export class AudioEngine {
   private tempoAutomation: TempoAutomation = defaultTempoAutomation()
   private droneConfig: DroneConfig = defaultDroneConfig()
   private droneVoices: DroneVoices | null = null
-  private currentChord: string | null = null
+  private timeline: Timeline = EMPTY_TIMELINE
+  /** Chord symbol the drone is currently voicing (tracks scheduled changes). */
+  private droneSymbol: string | null = null
 
   private cursor: BeatPosition = START_POSITION
   private displayPos: BeatPosition = START_POSITION
   private currentBarMuted = false
+  private currentBarSymbol: string | null = null
   private displayMuted = false
+  private displaySymbol: string | null = null
   private nextNoteTime = 0
   private queue: ScheduledNote[] = []
   private rafId: number | null = null
   private readonly listeners = new Set<PositionListener>()
   private readonly bpmListeners = new Set<BpmListener>()
+  private readonly chordListeners = new Set<ChordListener>()
 
   get isPlaying(): boolean {
     return this.playing
@@ -107,6 +121,14 @@ export class AudioEngine {
     this.bpmListeners.add(listener)
     return () => {
       this.bpmListeners.delete(listener)
+    }
+  }
+
+  /** Subscribe to the current drone chord (synced to audio time). */
+  onChord(listener: ChordListener): () => void {
+    this.chordListeners.add(listener)
+    return () => {
+      this.chordListeners.delete(listener)
     }
   }
 
@@ -147,23 +169,32 @@ export class AudioEngine {
       this.droneVoices.setVolume(config.volume)
       this.droneVoices.setEnabled(config.enabled)
     }
-    if (config.register !== prev.register) this.applyChord()
+    // Re-voice the sounding chord immediately when the register changes.
+    if (config.register !== prev.register) this.voiceDrone(this.droneSymbol)
   }
 
-  /** Set the chord the drone should sound (a symbol like "Cmaj7", or null). */
-  setChord(symbol: string | null): void {
-    this.currentChord = symbol
-    this.applyChord()
+  /** Set the chord progression that drives the drone. */
+  setProgression(sections: Section[]): void {
+    this.timeline = buildTimeline(sections)
+    // When stopped, preview the first chord so enabling the drone is audible.
+    if (!this.playing) {
+      const symbol = chordAtBar(this.timeline, 0)?.symbol ?? null
+      this.droneSymbol = symbol
+      this.displaySymbol = symbol
+      this.voiceDrone(symbol)
+      this.fireChord(symbol)
+    }
   }
 
-  private applyChord(): void {
+  /** Voice a chord symbol on the drone immediately (or schedule at `atTime`). */
+  private voiceDrone(symbol: string | null, atTime?: number): void {
     if (!this.droneVoices) return
-    if (!this.currentChord) {
-      this.droneVoices.setFrequencies([])
+    if (!symbol) {
+      this.droneVoices.setFrequencies([], atTime)
       return
     }
-    const voiced = voiceChordSymbol(this.currentChord, this.droneConfig.register)
-    this.droneVoices.setFrequencies(voiced.valid ? voiced.frequencies : [])
+    const voiced = voiceChordSymbol(symbol, this.droneConfig.register)
+    this.droneVoices.setFrequencies(voiced.valid ? voiced.frequencies : [], atTime)
   }
 
   /**
@@ -184,7 +215,7 @@ export class AudioEngine {
       this.droneVoices.setWaveform(this.droneConfig.waveform)
       this.droneVoices.setVolume(this.droneConfig.volume)
       this.droneVoices.setEnabled(this.droneConfig.enabled)
-      this.applyChord()
+      this.voiceDrone(this.droneSymbol)
     }
     return this.ctx
   }
@@ -207,6 +238,7 @@ export class AudioEngine {
     this.displayPos = START_POSITION
     this.currentBarMuted = false
     this.displayMuted = false
+    this.droneSymbol = null // force the first bar to (re)voice the drone
     this.bpm = this.baseBpm
     this.queue = []
     this.nextNoteTime = ctx.currentTime + FIRST_NOTE_DELAY
@@ -228,6 +260,12 @@ export class AudioEngine {
     this.queue = []
     this.bpm = this.baseBpm
     this.fireBpm()
+    // Return the drone to the first chord of the progression (preview state).
+    const symbol = chordAtBar(this.timeline, 0)?.symbol ?? null
+    this.droneSymbol = symbol
+    this.displaySymbol = symbol
+    this.voiceDrone(symbol)
+    this.fireChord(symbol)
     this.notify()
   }
 
@@ -238,12 +276,15 @@ export class AudioEngine {
     if (!this.ctx || !this.playing) return
     const horizon = this.ctx.currentTime + SCHEDULE_AHEAD_TIME
     while (this.nextNoteTime < horizon) {
-      if (isDownbeat(this.cursor)) this.enterBar(this.cursor.barCount)
+      if (isDownbeat(this.cursor)) {
+        this.enterBar(this.cursor.barCount, this.nextNoteTime)
+      }
       this.scheduleNote(this.cursor, this.nextNoteTime, this.currentBarMuted)
       this.queue.push({
         position: this.cursor,
         time: this.nextNoteTime,
         muted: this.currentBarMuted,
+        symbol: this.currentBarSymbol,
       })
       this.nextNoteTime += secondsPerSubdivision(
         this.bpm,
@@ -257,14 +298,22 @@ export class AudioEngine {
     }
   }
 
-  /** Apply per-bar trainer effects when a new bar begins. */
-  private enterBar(barIndex: number): void {
+  /** Apply per-bar effects (tempo automation, gap mute, chord change) at a bar. */
+  private enterBar(barIndex: number, time: number): void {
     const effective = tempoForBar(this.baseBpm, barIndex, this.tempoAutomation)
     if (effective !== this.bpm) {
       this.bpm = effective
       this.fireBpm()
     }
     this.currentBarMuted = this.decideMute(barIndex)
+
+    // Drive the drone from the progression; schedule the change at the bar time.
+    const symbol = chordAtBar(this.timeline, barIndex)?.symbol ?? null
+    this.currentBarSymbol = symbol
+    if (symbol !== this.droneSymbol) {
+      this.droneSymbol = symbol
+      this.voiceDrone(symbol, time)
+    }
   }
 
   private decideMute(barIndex: number): boolean {
@@ -308,13 +357,19 @@ export class AudioEngine {
       if (!this.playing || !this.ctx) return
       const now = this.ctx.currentTime
       let updated = false
+      let chordChanged = false
       while (this.queue.length > 0 && this.queue[0].time <= now) {
         const note = this.queue.shift()!
         this.displayPos = note.position
         this.displayMuted = note.muted
+        if (note.symbol !== this.displaySymbol) {
+          this.displaySymbol = note.symbol
+          chordChanged = true
+        }
         updated = true
       }
       if (updated) this.notify()
+      if (chordChanged) this.fireChord(this.displaySymbol)
       this.rafId = requestAnimationFrame(tick)
     }
     this.rafId = requestAnimationFrame(tick)
@@ -328,6 +383,10 @@ export class AudioEngine {
 
   private fireBpm(): void {
     for (const listener of this.bpmListeners) listener(this.bpm)
+  }
+
+  private fireChord(symbol: string | null): void {
+    for (const listener of this.chordListeners) listener(symbol)
   }
 }
 

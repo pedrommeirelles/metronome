@@ -1,5 +1,5 @@
-// Chord drone controls: on/off, register, waveform, volume, plus a temporary
-// manual chord field (Phase 4 will drive the chord from the progression).
+// Chord drone controls: on/off, register, waveform, volume. The chord itself is
+// driven by the progression (see ProgressionEditor); here we show what's voicing.
 
 import { voiceChordSymbol } from '../audio/chordEngine'
 import { useStore } from '../state/store'
@@ -13,43 +13,27 @@ const selectClass =
 
 export function DronePanel() {
   const drone = useStore((s) => s.drone)
-  const chord = useStore((s) => s.chord)
+  const currentChord = useStore((s) => s.currentChord)
   const updateDrone = useStore((s) => s.updateDrone)
-  const setChord = useStore((s) => s.setChord)
 
-  const voiced = voiceChordSymbol(chord, drone.register)
-  const showError = chord.trim() !== '' && !voiced.valid
+  const voiced = currentChord
+    ? voiceChordSymbol(currentChord, drone.register)
+    : null
 
   return (
     <div className="flex w-full max-w-xl flex-col gap-4 rounded-2xl bg-zinc-900 p-5">
-      <label className="flex cursor-pointer items-center gap-2 font-medium">
-        <input
-          type="checkbox"
-          checked={drone.enabled}
-          onChange={(e) => updateDrone({ enabled: e.target.checked })}
-          className="h-4 w-4 accent-violet-500"
-        />
-        Chord drone
-      </label>
-
-      <div className="flex flex-col gap-1">
-        <span className="text-sm text-zinc-400">Chord</span>
-        <input
-          type="text"
-          value={chord}
-          onChange={(e) => setChord(e.target.value)}
-          placeholder="e.g. Cmaj7, G7b9, D/F#"
-          className={`${selectClass} ${showError ? 'ring-2 ring-red-500' : ''}`}
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
-        />
-        <span className="h-5 text-xs">
-          {showError ? (
-            <span className="text-red-400">Unrecognized chord symbol</span>
-          ) : (
-            <span className="text-zinc-500">{voiced.notes.join(' · ')}</span>
-          )}
+      <div className="flex items-center justify-between">
+        <label className="flex cursor-pointer items-center gap-2 font-medium">
+          <input
+            type="checkbox"
+            checked={drone.enabled}
+            onChange={(e) => updateDrone({ enabled: e.target.checked })}
+            className="h-4 w-4 accent-violet-500"
+          />
+          Chord drone
+        </label>
+        <span className="text-xs text-zinc-500">
+          {voiced?.valid ? voiced.notes.join(' · ') : 'no chord'}
         </span>
       </div>
 

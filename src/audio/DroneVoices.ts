@@ -55,10 +55,14 @@ export class DroneVoices {
     this.applyMasterGain()
   }
 
-  /** Set the sounding chord by frequency; crossfades from the current voices. */
-  setFrequencies(frequencies: number[]): void {
+  /**
+   * Set the sounding chord by frequency; crossfades from the current voices.
+   * `atTime` lets the caller schedule the change at a precise future moment (a
+   * bar boundary) so it lands exactly with the click, not early during lookahead.
+   */
+  setFrequencies(frequencies: number[], atTime?: number): void {
     if (sameFrequencies(frequencies, this.currentFreqs)) return
-    const t = this.ctx.currentTime
+    const t = Math.max(atTime ?? this.ctx.currentTime, this.ctx.currentTime)
 
     // Fade out and retire the old voices.
     for (const v of this.voices) {
