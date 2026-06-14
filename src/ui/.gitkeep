@@ -1,2 +1,0 @@
-# UI: React components (transport bar, visual metronome, metronome/trainer/drone panels,
-# progression editor). Subscribes to the audio engine; never touches Web Audio directly.
