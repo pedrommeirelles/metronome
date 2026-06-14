@@ -4,7 +4,14 @@ A browser-first **rhythm & pocket-training metronome** with a continuous **chord
 
 ## Status
 
-Early development. Phase 0 (project scaffold) is complete. See the implementation plan for the full roadmap.
+MVP feature-complete. Implemented: accurate metronome (subdivisions, custom
+per-beat accents, odd/compound meters, sound bank, tap tempo), pocket trainers
+(gap/mute, tempo automation), chord drone (oscillator voices, low/mid/high
+register, click-free chord changes), chord progression with sections/repeats
+driving the drone, and save/load to localStorage.
+
+Deferred to a later version: polyrhythm/stacked meters, setlists (multiple
+songs), expanded/sampled sounds, MIDI/Ableton Link, PWA/mobile.
 
 ## Tech stack
 

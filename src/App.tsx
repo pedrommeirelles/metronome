@@ -3,6 +3,7 @@ import { DronePanel } from './ui/DronePanel'
 import { MetronomePanel } from './ui/MetronomePanel'
 import { NowPlaying } from './ui/NowPlaying'
 import { ProgressionEditor } from './ui/ProgressionEditor'
+import { SongBar } from './ui/SongBar'
 import { TrainerPanel } from './ui/TrainerPanel'
 import { TransportControls } from './ui/TransportControls'
 
@@ -13,10 +14,11 @@ export default function App() {
         <header className="text-center">
           <h1 className="text-3xl font-semibold tracking-tight">Metronome</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Tap a beat to change its accent.
+            Rhythm &amp; pocket training with a chord drone.
           </p>
         </header>
 
+        <SongBar />
         <NowPlaying />
         <BeatRow />
         <TransportControls />

@@ -2,10 +2,14 @@
 // config, trainer settings, drone config, and the chord progression, forwarding
 // every change to the AudioEngine (which owns the Web Audio graph). The engine
 // pushes position, tempo, and current-chord updates back via its subscriptions.
+//
+// A whole Song can be assembled from state, saved to localStorage, and applied
+// back (load / new). The last saved song auto-loads on startup.
 
 import { create } from 'zustand'
 import { audioEngine } from '../audio/AudioEngine'
 import { START_POSITION, type BeatPosition } from '../audio/transport'
+import { clearSong, loadSong, saveSong } from '../persistence/songStorage'
 import { newId } from './ids'
 import {
   MAX_BPM,
@@ -21,13 +25,13 @@ import {
   type GapTrainer,
   type MetronomeConfig,
   type Section,
+  type Song,
   type TempoAutomation,
   type TimeSignature,
 } from './types'
 
 const ACCENT_CYCLE: AccentLevel[] = ['strong', 'normal', 'soft', 'muted']
-const INITIAL_BPM = 120
-const INITIAL_TS: TimeSignature = { beatsPerBar: 4, beatUnit: 4 }
+const DEFAULT_TS: TimeSignature = { beatsPerBar: 4, beatUnit: 4 }
 
 /** A small demo progression so the harmonic feature is visible on first load. */
 function seedProgression(): Section[] {
@@ -46,6 +50,20 @@ function seedProgression(): Section[] {
   ]
 }
 
+function defaultSong(): Song {
+  return {
+    id: newId(),
+    name: 'Untitled',
+    bpm: 120,
+    timeSignature: DEFAULT_TS,
+    metronome: defaultMetronomeConfig(DEFAULT_TS.beatsPerBar),
+    gapTrainer: defaultGapTrainer(),
+    tempoAutomation: defaultTempoAutomation(),
+    drone: defaultDroneConfig(),
+    sections: seedProgression(),
+  }
+}
+
 function newChord(): ChordSpan {
   return { id: newId(), symbol: 'C', bars: 2 }
 }
@@ -60,6 +78,8 @@ export function clampBpm(n: number): number {
 }
 
 interface AppState {
+  songId: string
+  name: string
   bpm: number
   timeSignature: TimeSignature
   metronome: MetronomeConfig
@@ -77,6 +97,7 @@ interface AppState {
   play: () => void
   stop: () => void
   toggle: () => void
+  setName: (name: string) => void
   setBpm: (bpm: number) => void
   setTimeSignature: (ts: TimeSignature) => void
   setSubdivision: (n: number) => void
@@ -97,6 +118,11 @@ interface AppState {
   removeChord: (sectionId: string, chordId: string) => void
   updateChord: (sectionId: string, chordId: string, patch: Partial<ChordSpan>) => void
   moveChord: (sectionId: string, chordId: string, dir: -1 | 1) => void
+
+  // Persistence
+  save: () => void
+  loadSaved: () => void
+  reset: () => void
 }
 
 function moveItem<T>(items: T[], index: number, dir: -1 | 1): T[] {
@@ -107,26 +133,46 @@ function moveItem<T>(items: T[], index: number, dir: -1 | 1): T[] {
   return next
 }
 
-export const useStore = create<AppState>((set, get) => {
-  const initialConfig = defaultMetronomeConfig(INITIAL_TS.beatsPerBar)
-  const initialGap = defaultGapTrainer()
-  const initialTempo = defaultTempoAutomation()
-  const initialDrone = defaultDroneConfig()
-  const initialSections = seedProgression()
+function snapshotSong(s: AppState): Song {
+  return {
+    id: s.songId,
+    name: s.name,
+    bpm: s.bpm,
+    timeSignature: s.timeSignature,
+    metronome: s.metronome,
+    gapTrainer: s.gapTrainer,
+    tempoAutomation: s.tempoAutomation,
+    drone: s.drone,
+    sections: s.sections,
+  }
+}
 
-  // Prime the engine with the initial config and wire updates back.
-  audioEngine.setBpm(INITIAL_BPM)
-  audioEngine.setTimeSignature(INITIAL_TS)
-  audioEngine.setConfig(initialConfig)
-  audioEngine.setGapTrainer(initialGap)
-  audioEngine.setTempoAutomation(initialTempo)
-  audioEngine.setDroneConfig(initialDrone)
-  audioEngine.setProgression(initialSections)
-  audioEngine.onPosition((position, isPlaying, barMuted) =>
-    set({ position, isPlaying, barMuted }),
-  )
-  audioEngine.onBpm((bpm) => set({ bpm }))
-  audioEngine.onChord((currentChord) => set({ currentChord }))
+export const useStore = create<AppState>((set, get) => {
+  /** Push an entire song to the engine and store. */
+  const applySong = (song: Song) => {
+    audioEngine.stop()
+    audioEngine.setBpm(song.bpm)
+    audioEngine.setTimeSignature(song.timeSignature)
+    audioEngine.setConfig(song.metronome)
+    audioEngine.setGapTrainer(song.gapTrainer)
+    audioEngine.setTempoAutomation(song.tempoAutomation)
+    audioEngine.setDroneConfig(song.drone)
+    audioEngine.setProgression(song.sections)
+    set({
+      songId: song.id,
+      name: song.name,
+      bpm: song.bpm,
+      timeSignature: song.timeSignature,
+      metronome: song.metronome,
+      gapTrainer: song.gapTrainer,
+      tempoAutomation: song.tempoAutomation,
+      drone: song.drone,
+      sections: song.sections,
+      isPlaying: false,
+      position: START_POSITION,
+      barMuted: false,
+    })
+  }
 
   const applyConfig = (patch: Partial<MetronomeConfig>) => {
     const metronome = { ...get().metronome, ...patch }
@@ -134,27 +180,42 @@ export const useStore = create<AppState>((set, get) => {
     set({ metronome })
   }
 
-  /** Commit edited sections to both the engine and the store. */
   const applySections = (sections: Section[]) => {
     audioEngine.setProgression(sections)
     set({ sections })
   }
 
-  /** Edit one section immutably by id. */
   const editSection = (sectionId: string, fn: (s: Section) => Section) => {
-    applySections(
-      get().sections.map((s) => (s.id === sectionId ? fn(s) : s)),
-    )
+    applySections(get().sections.map((s) => (s.id === sectionId ? fn(s) : s)))
   }
 
+  // Wire engine -> store updates once.
+  audioEngine.onPosition((position, isPlaying, barMuted) =>
+    set({ position, isPlaying, barMuted }),
+  )
+  audioEngine.onBpm((bpm) => set({ bpm }))
+  audioEngine.onChord((currentChord) => set({ currentChord }))
+
+  const initial = loadSong() ?? defaultSong()
+  // Prime the engine from the initial song.
+  audioEngine.setBpm(initial.bpm)
+  audioEngine.setTimeSignature(initial.timeSignature)
+  audioEngine.setConfig(initial.metronome)
+  audioEngine.setGapTrainer(initial.gapTrainer)
+  audioEngine.setTempoAutomation(initial.tempoAutomation)
+  audioEngine.setDroneConfig(initial.drone)
+  audioEngine.setProgression(initial.sections)
+
   return {
-    bpm: INITIAL_BPM,
-    timeSignature: INITIAL_TS,
-    metronome: initialConfig,
-    gapTrainer: initialGap,
-    tempoAutomation: initialTempo,
-    drone: initialDrone,
-    sections: initialSections,
+    songId: initial.id,
+    name: initial.name,
+    bpm: initial.bpm,
+    timeSignature: initial.timeSignature,
+    metronome: initial.metronome,
+    gapTrainer: initial.gapTrainer,
+    tempoAutomation: initial.tempoAutomation,
+    drone: initial.drone,
+    sections: initial.sections,
     isPlaying: false,
     position: START_POSITION,
     barMuted: false,
@@ -163,6 +224,8 @@ export const useStore = create<AppState>((set, get) => {
     play: () => void audioEngine.start(),
     stop: () => audioEngine.stop(),
     toggle: () => (get().isPlaying ? get().stop() : get().play()),
+
+    setName: (name) => set({ name }),
 
     setBpm: (bpm) => {
       const value = clampBpm(bpm)
@@ -229,10 +292,7 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     addChord: (sectionId) =>
-      editSection(sectionId, (s) => ({
-        ...s,
-        chords: [...s.chords, newChord()],
-      })),
+      editSection(sectionId, (s) => ({ ...s, chords: [...s.chords, newChord()] })),
 
     removeChord: (sectionId, chordId) =>
       editSection(sectionId, (s) => ({
@@ -243,9 +303,7 @@ export const useStore = create<AppState>((set, get) => {
     updateChord: (sectionId, chordId, patch) =>
       editSection(sectionId, (s) => ({
         ...s,
-        chords: s.chords.map((c) =>
-          c.id === chordId ? { ...c, ...patch } : c,
-        ),
+        chords: s.chords.map((c) => (c.id === chordId ? { ...c, ...patch } : c)),
       })),
 
     moveChord: (sectionId, chordId, dir) =>
@@ -253,5 +311,15 @@ export const useStore = create<AppState>((set, get) => {
         const index = s.chords.findIndex((c) => c.id === chordId)
         return { ...s, chords: moveItem(s.chords, index, dir) }
       }),
+
+    save: () => saveSong(snapshotSong(get())),
+    loadSaved: () => {
+      const song = loadSong()
+      if (song) applySong(song)
+    },
+    reset: () => {
+      clearSong()
+      applySong(defaultSong())
+    },
   }
 })
