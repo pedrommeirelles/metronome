@@ -3,13 +3,14 @@
 // every change to the AudioEngine (which owns the Web Audio graph). The engine
 // pushes position, tempo, and current-chord updates back via its subscriptions.
 //
-// A whole Song can be assembled from state, saved to localStorage, and applied
-// back (load / new). The last saved song auto-loads on startup.
+// Progressions are seeded from the built-in library (see data/presets.ts);
+// loadPreset() swaps in a preset's tempo, meter, and changes while preserving
+// the user's sound, drone, and trainer preferences.
 
 import { create } from 'zustand'
 import { audioEngine } from '../audio/AudioEngine'
 import { START_POSITION, type BeatPosition } from '../audio/transport'
-import { clearSong, loadSong, saveSong } from '../persistence/songStorage'
+import type { ProgressionPreset } from '../data/presets'
 import { newId } from './ids'
 import {
   MAX_BPM,
@@ -78,7 +79,6 @@ export function clampBpm(n: number): number {
 }
 
 interface AppState {
-  songId: string
   name: string
   bpm: number
   timeSignature: TimeSignature
@@ -119,10 +119,8 @@ interface AppState {
   updateChord: (sectionId: string, chordId: string, patch: Partial<ChordSpan>) => void
   moveChord: (sectionId: string, chordId: string, dir: -1 | 1) => void
 
-  // Persistence
-  save: () => void
-  loadSaved: () => void
-  reset: () => void
+  /** Load a built-in library preset (tempo, meter, and changes). */
+  loadPreset: (preset: ProgressionPreset) => void
 }
 
 function moveItem<T>(items: T[], index: number, dir: -1 | 1): T[] {
@@ -133,47 +131,8 @@ function moveItem<T>(items: T[], index: number, dir: -1 | 1): T[] {
   return next
 }
 
-function snapshotSong(s: AppState): Song {
-  return {
-    id: s.songId,
-    name: s.name,
-    bpm: s.bpm,
-    timeSignature: s.timeSignature,
-    metronome: s.metronome,
-    gapTrainer: s.gapTrainer,
-    tempoAutomation: s.tempoAutomation,
-    drone: s.drone,
-    sections: s.sections,
-  }
-}
-
 export const useStore = create<AppState>((set, get) => {
   /** Push an entire song to the engine and store. */
-  const applySong = (song: Song) => {
-    audioEngine.stop()
-    audioEngine.setBpm(song.bpm)
-    audioEngine.setTimeSignature(song.timeSignature)
-    audioEngine.setConfig(song.metronome)
-    audioEngine.setGapTrainer(song.gapTrainer)
-    audioEngine.setTempoAutomation(song.tempoAutomation)
-    audioEngine.setDroneConfig(song.drone)
-    audioEngine.setProgression(song.sections)
-    set({
-      songId: song.id,
-      name: song.name,
-      bpm: song.bpm,
-      timeSignature: song.timeSignature,
-      metronome: song.metronome,
-      gapTrainer: song.gapTrainer,
-      tempoAutomation: song.tempoAutomation,
-      drone: song.drone,
-      sections: song.sections,
-      isPlaying: false,
-      position: START_POSITION,
-      barMuted: false,
-    })
-  }
-
   const applyConfig = (patch: Partial<MetronomeConfig>) => {
     const metronome = { ...get().metronome, ...patch }
     audioEngine.setConfig(metronome)
@@ -196,7 +155,7 @@ export const useStore = create<AppState>((set, get) => {
   audioEngine.onBpm((bpm) => set({ bpm }))
   audioEngine.onChord((currentChord) => set({ currentChord }))
 
-  const initial = loadSong() ?? defaultSong()
+  const initial = defaultSong()
   // Prime the engine from the initial song.
   audioEngine.setBpm(initial.bpm)
   audioEngine.setTimeSignature(initial.timeSignature)
@@ -207,7 +166,6 @@ export const useStore = create<AppState>((set, get) => {
   audioEngine.setProgression(initial.sections)
 
   return {
-    songId: initial.id,
     name: initial.name,
     bpm: initial.bpm,
     timeSignature: initial.timeSignature,
@@ -312,14 +270,40 @@ export const useStore = create<AppState>((set, get) => {
         return { ...s, chords: moveItem(s.chords, index, dir) }
       }),
 
-    save: () => saveSong(snapshotSong(get())),
-    loadSaved: () => {
-      const song = loadSong()
-      if (song) applySong(song)
-    },
-    reset: () => {
-      clearSong()
-      applySong(defaultSong())
+    loadPreset: (preset) => {
+      const sections: Section[] = preset.sections.map((ps) => ({
+        id: newId(),
+        name: ps.name,
+        repeats: ps.repeats,
+        chords: ps.chords.map((pc) => ({
+          id: newId(),
+          symbol: pc.symbol,
+          bars: pc.bars,
+        })),
+      }))
+      // Resize accents to the preset meter; keep the user's other prefs.
+      const metronome = {
+        ...get().metronome,
+        accents: resizeAccents(
+          get().metronome.accents,
+          preset.timeSignature.beatsPerBar,
+        ),
+      }
+      audioEngine.stop()
+      audioEngine.setBpm(preset.bpm)
+      audioEngine.setTimeSignature(preset.timeSignature)
+      audioEngine.setConfig(metronome)
+      audioEngine.setProgression(sections)
+      set({
+        name: preset.name,
+        bpm: preset.bpm,
+        timeSignature: preset.timeSignature,
+        metronome,
+        sections,
+        isPlaying: false,
+        position: START_POSITION,
+        barMuted: false,
+      })
     },
   }
 })

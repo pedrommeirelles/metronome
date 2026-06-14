@@ -8,10 +8,11 @@ MVP feature-complete. Implemented: accurate metronome (subdivisions, custom
 per-beat accents, odd/compound meters, sound bank, tap tempo), pocket trainers
 (gap/mute, tempo automation), chord drone (oscillator voices, low/mid/high
 register, click-free chord changes), chord progression with sections/repeats
-driving the drone, and save/load to localStorage.
+driving the drone, and a built-in library of progressions and jazz standards
+(blues, ii–V–I, rhythm changes, modal, bossa, standards) loadable in one click.
 
-Deferred to a later version: polyrhythm/stacked meters, setlists (multiple
-songs), expanded/sampled sounds, MIDI/Ableton Link, PWA/mobile.
+Deferred to a later version: polyrhythm/stacked meters, setlists / saving your
+own songs, expanded/sampled sounds, MIDI/Ableton Link, PWA/mobile.
 
 ## Tech stack
 

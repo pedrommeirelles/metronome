@@ -1,9 +1,9 @@
 import { BeatRow } from './ui/BeatRow'
 import { DronePanel } from './ui/DronePanel'
 import { MetronomePanel } from './ui/MetronomePanel'
+import { LibraryPicker } from './ui/LibraryPicker'
 import { NowPlaying } from './ui/NowPlaying'
 import { ProgressionEditor } from './ui/ProgressionEditor'
-import { SongBar } from './ui/SongBar'
 import { TrainerPanel } from './ui/TrainerPanel'
 import { TransportControls } from './ui/TransportControls'
 
@@ -18,7 +18,7 @@ export default function App() {
           </p>
         </header>
 
-        <SongBar />
+        <LibraryPicker />
         <NowPlaying />
         <BeatRow />
         <TransportControls />
