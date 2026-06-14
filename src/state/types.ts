@@ -146,3 +146,22 @@ export function defaultMetronomeConfig(beatsPerBar: number): MetronomeConfig {
     volume: 0.8,
   }
 }
+
+export function defaultGapTrainer(): GapTrainer {
+  return {
+    enabled: false,
+    playBars: 4,
+    muteBars: 4,
+    mode: 'fixed',
+    randomMutePct: 0.5,
+  }
+}
+
+export function defaultTempoAutomation(): TempoAutomation {
+  return {
+    enabled: false,
+    increment: 5,
+    everyBars: 4,
+    maxBpm: 200,
+  }
+}

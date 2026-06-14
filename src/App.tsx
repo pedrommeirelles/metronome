@@ -1,5 +1,6 @@
 import { BeatRow } from './ui/BeatRow'
 import { MetronomePanel } from './ui/MetronomePanel'
+import { TrainerPanel } from './ui/TrainerPanel'
 import { TransportControls } from './ui/TransportControls'
 
 export default function App() {
@@ -16,6 +17,7 @@ export default function App() {
         <BeatRow />
         <TransportControls />
         <MetronomePanel />
+        <TrainerPanel />
       </main>
     </div>
   )

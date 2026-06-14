@@ -6,12 +6,17 @@
 // on the AudioContext clock via precise start times. Playback is therefore
 // sample-accurate and drift-free regardless of JS timer jitter.
 //
-// React never imports Web Audio directly — it talks to this engine and
-// subscribes to position updates via onPosition().
+// Pocket trainers are applied at bar boundaries: tempo automation recomputes the
+// effective tempo per bar, and the gap trainer decides whether a bar's clicks
+// are muted. React never imports Web Audio directly — it talks to this engine.
 
 import {
+  defaultGapTrainer,
   defaultMetronomeConfig,
+  defaultTempoAutomation,
+  type GapTrainer,
   type MetronomeConfig,
+  type TempoAutomation,
   type TimeSignature,
 } from '../state/types'
 import {
@@ -23,20 +28,28 @@ import {
 import {
   advancePosition,
   isBeat,
+  isDownbeat,
   secondsPerSubdivision,
   START_POSITION,
   type BeatPosition,
 } from './transport'
+import { isBarMutedFixed, tempoForBar } from './trainers'
 
 const SCHEDULE_AHEAD_TIME = 0.1 // seconds to schedule into the future
 const WORKER_INTERVAL = 25 // ms between scheduler wake-ups
 const FIRST_NOTE_DELAY = 0.1 // seconds before the first click
 
-export type PositionListener = (pos: BeatPosition, isPlaying: boolean) => void
+export type PositionListener = (
+  pos: BeatPosition,
+  isPlaying: boolean,
+  muted: boolean,
+) => void
+export type BpmListener = (bpm: number) => void
 
 interface ScheduledNote {
   position: BeatPosition
   time: number
+  muted: boolean
 }
 
 type AudioContextCtor = typeof AudioContext
@@ -47,16 +60,24 @@ export class AudioEngine {
   private worker: Worker | null = null
 
   private playing = false
+  /** User-set tempo (the slider). */
+  private baseBpm = 120
+  /** Effective tempo after tempo automation. */
   private bpm = 120
   private timeSignature: TimeSignature = { beatsPerBar: 4, beatUnit: 4 }
   private config: MetronomeConfig = defaultMetronomeConfig(4)
+  private gapTrainer: GapTrainer = defaultGapTrainer()
+  private tempoAutomation: TempoAutomation = defaultTempoAutomation()
 
   private cursor: BeatPosition = START_POSITION
   private displayPos: BeatPosition = START_POSITION
+  private currentBarMuted = false
+  private displayMuted = false
   private nextNoteTime = 0
   private queue: ScheduledNote[] = []
   private rafId: number | null = null
   private readonly listeners = new Set<PositionListener>()
+  private readonly bpmListeners = new Set<BpmListener>()
 
   get isPlaying(): boolean {
     return this.playing
@@ -74,8 +95,20 @@ export class AudioEngine {
     }
   }
 
+  /** Subscribe to effective-tempo changes (e.g. from tempo automation). */
+  onBpm(listener: BpmListener): () => void {
+    this.bpmListeners.add(listener)
+    return () => {
+      this.bpmListeners.delete(listener)
+    }
+  }
+
   setBpm(bpm: number): void {
-    this.bpm = bpm
+    this.baseBpm = bpm
+    this.bpm = this.playing
+      ? tempoForBar(bpm, this.cursor.barCount, this.tempoAutomation)
+      : bpm
+    this.fireBpm()
   }
 
   setTimeSignature(ts: TimeSignature): void {
@@ -84,6 +117,14 @@ export class AudioEngine {
 
   setConfig(config: MetronomeConfig): void {
     this.config = config
+  }
+
+  setGapTrainer(gap: GapTrainer): void {
+    this.gapTrainer = gap
+  }
+
+  setTempoAutomation(automation: TempoAutomation): void {
+    this.tempoAutomation = automation
   }
 
   async start(): Promise<void> {
@@ -111,9 +152,13 @@ export class AudioEngine {
 
     this.cursor = START_POSITION
     this.displayPos = START_POSITION
+    this.currentBarMuted = false
+    this.displayMuted = false
+    this.bpm = this.baseBpm
     this.queue = []
     this.nextNoteTime = this.ctx.currentTime + FIRST_NOTE_DELAY
     this.playing = true
+    this.fireBpm()
     this.worker.postMessage({ type: 'start', interval: WORKER_INTERVAL })
     this.startDrawLoop()
     this.notify()
@@ -128,6 +173,8 @@ export class AudioEngine {
       this.rafId = null
     }
     this.queue = []
+    this.bpm = this.baseBpm
+    this.fireBpm()
     this.notify()
   }
 
@@ -138,9 +185,17 @@ export class AudioEngine {
     if (!this.ctx || !this.playing) return
     const horizon = this.ctx.currentTime + SCHEDULE_AHEAD_TIME
     while (this.nextNoteTime < horizon) {
-      this.scheduleNote(this.cursor, this.nextNoteTime)
-      this.queue.push({ position: this.cursor, time: this.nextNoteTime })
-      this.nextNoteTime += secondsPerSubdivision(this.bpm, this.config.subdivision)
+      if (isDownbeat(this.cursor)) this.enterBar(this.cursor.barCount)
+      this.scheduleNote(this.cursor, this.nextNoteTime, this.currentBarMuted)
+      this.queue.push({
+        position: this.cursor,
+        time: this.nextNoteTime,
+        muted: this.currentBarMuted,
+      })
+      this.nextNoteTime += secondsPerSubdivision(
+        this.bpm,
+        this.config.subdivision,
+      )
       this.cursor = advancePosition(
         this.cursor,
         this.timeSignature.beatsPerBar,
@@ -149,14 +204,33 @@ export class AudioEngine {
     }
   }
 
-  private scheduleNote(pos: BeatPosition, time: number): void {
-    if (!this.ctx || !this.master) return
+  /** Apply per-bar trainer effects when a new bar begins. */
+  private enterBar(barIndex: number): void {
+    const effective = tempoForBar(this.baseBpm, barIndex, this.tempoAutomation)
+    if (effective !== this.bpm) {
+      this.bpm = effective
+      this.fireBpm()
+    }
+    this.currentBarMuted = this.decideMute(barIndex)
+  }
+
+  private decideMute(barIndex: number): boolean {
+    const gap = this.gapTrainer
+    if (!gap.enabled) return false
+    if (gap.mode === 'fixed') {
+      return isBarMutedFixed(barIndex, gap.playBars, gap.muteBars)
+    }
+    return Math.random() < (gap.randomMutePct ?? 0)
+  }
+
+  private scheduleNote(pos: BeatPosition, time: number, muted: boolean): void {
+    if (!this.ctx || !this.master || muted) return
     const { config } = this
     const sound = getSound(config.soundId)
     const level =
       config.accents[pos.beatInBar] ?? (pos.beatInBar === 0 ? 'strong' : 'normal')
 
-    // A muted beat silences its subdivision ticks too.
+    // A muted-accent beat silences its subdivision ticks too.
     if (level === 'muted') return
 
     if (isBeat(pos)) {
@@ -182,7 +256,9 @@ export class AudioEngine {
       const now = this.ctx.currentTime
       let updated = false
       while (this.queue.length > 0 && this.queue[0].time <= now) {
-        this.displayPos = this.queue.shift()!.position
+        const note = this.queue.shift()!
+        this.displayPos = note.position
+        this.displayMuted = note.muted
         updated = true
       }
       if (updated) this.notify()
@@ -192,7 +268,13 @@ export class AudioEngine {
   }
 
   private notify(): void {
-    for (const listener of this.listeners) listener(this.displayPos, this.playing)
+    for (const listener of this.listeners) {
+      listener(this.displayPos, this.playing, this.displayMuted)
+    }
+  }
+
+  private fireBpm(): void {
+    for (const listener of this.bpmListeners) listener(this.bpm)
   }
 }
 

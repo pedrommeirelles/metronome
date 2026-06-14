@@ -1,7 +1,7 @@
 // Zustand store: the single source of UI-facing state. It mirrors the metronome
-// config and transport position, and forwards every change to the AudioEngine
-// (which owns the actual Web Audio graph). The engine pushes position updates
-// back via onPosition().
+// config, trainer settings, and transport position, forwarding every change to
+// the AudioEngine (which owns the actual Web Audio graph). The engine pushes
+// position and effective-tempo updates back via onPosition()/onBpm().
 
 import { create } from 'zustand'
 import { audioEngine } from '../audio/AudioEngine'
@@ -9,10 +9,14 @@ import { START_POSITION, type BeatPosition } from '../audio/transport'
 import {
   MAX_BPM,
   MIN_BPM,
+  defaultGapTrainer,
   defaultMetronomeConfig,
+  defaultTempoAutomation,
   resizeAccents,
   type AccentLevel,
+  type GapTrainer,
   type MetronomeConfig,
+  type TempoAutomation,
   type TimeSignature,
 } from './types'
 
@@ -29,8 +33,12 @@ interface AppState {
   bpm: number
   timeSignature: TimeSignature
   metronome: MetronomeConfig
+  gapTrainer: GapTrainer
+  tempoAutomation: TempoAutomation
   isPlaying: boolean
   position: BeatPosition
+  /** Whether the current bar's click is muted by the gap trainer. */
+  barMuted: boolean
 
   play: () => void
   stop: () => void
@@ -42,18 +50,26 @@ interface AppState {
   setSoundId: (id: string) => void
   setVolume: (v: number) => void
   setSubdivisionVolume: (v: number) => void
+  updateGapTrainer: (patch: Partial<GapTrainer>) => void
+  updateTempoAutomation: (patch: Partial<TempoAutomation>) => void
 }
 
 export const useStore = create<AppState>((set, get) => {
   const initialConfig = defaultMetronomeConfig(INITIAL_TS.beatsPerBar)
+  const initialGap = defaultGapTrainer()
+  const initialTempo = defaultTempoAutomation()
 
-  // Prime the engine with the initial config and wire position updates back.
+  // Prime the engine with the initial config and wire updates back.
   audioEngine.setBpm(INITIAL_BPM)
   audioEngine.setTimeSignature(INITIAL_TS)
   audioEngine.setConfig(initialConfig)
-  audioEngine.onPosition((position, isPlaying) => set({ position, isPlaying }))
+  audioEngine.setGapTrainer(initialGap)
+  audioEngine.setTempoAutomation(initialTempo)
+  audioEngine.onPosition((position, isPlaying, barMuted) =>
+    set({ position, isPlaying, barMuted }),
+  )
+  audioEngine.onBpm((bpm) => set({ bpm }))
 
-  /** Apply a metronome-config change to both the engine and the store. */
   const applyConfig = (patch: Partial<MetronomeConfig>) => {
     const metronome = { ...get().metronome, ...patch }
     audioEngine.setConfig(metronome)
@@ -64,8 +80,11 @@ export const useStore = create<AppState>((set, get) => {
     bpm: INITIAL_BPM,
     timeSignature: INITIAL_TS,
     metronome: initialConfig,
+    gapTrainer: initialGap,
+    tempoAutomation: initialTempo,
     isPlaying: false,
     position: START_POSITION,
+    barMuted: false,
 
     play: () => void audioEngine.start(),
     stop: () => audioEngine.stop(),
@@ -99,5 +118,17 @@ export const useStore = create<AppState>((set, get) => {
     setSoundId: (id) => applyConfig({ soundId: id }),
     setVolume: (v) => applyConfig({ volume: v }),
     setSubdivisionVolume: (v) => applyConfig({ subdivisionVolume: v }),
+
+    updateGapTrainer: (patch) => {
+      const gapTrainer = { ...get().gapTrainer, ...patch }
+      audioEngine.setGapTrainer(gapTrainer)
+      set({ gapTrainer })
+    },
+
+    updateTempoAutomation: (patch) => {
+      const tempoAutomation = { ...get().tempoAutomation, ...patch }
+      audioEngine.setTempoAutomation(tempoAutomation)
+      set({ tempoAutomation })
+    },
   }
 })
