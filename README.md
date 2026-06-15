@@ -4,15 +4,24 @@ A browser-first **rhythm & pocket-training metronome** with a continuous **chord
 
 ## Status
 
-MVP feature-complete. Implemented: accurate metronome (subdivisions, custom
-per-beat accents, odd/compound meters, sound bank, tap tempo), pocket trainers
-(gap/mute, tempo automation), chord drone (oscillator voices, low/mid/high
-register, click-free chord changes), chord progression with sections/repeats
-driving the drone, and a built-in library of progressions and jazz standards
-(blues, ii–V–I, rhythm changes, modal, bossa, standards) loadable in one click.
+MVP complete and extended. Implemented:
 
-Deferred to a later version: polyrhythm/stacked meters, setlists / saving your
-own songs, expanded/sampled sounds, MIDI/Ableton Link, PWA/mobile.
+- **Metronome:** accurate drift-free timing, subdivisions, custom per-beat
+  accents, odd/compound meters, sound bank, tap tempo, **count-in**, **swing**.
+- **Pocket trainers:** gap/mute trainer, tempo automation.
+- **Chord drone:** oscillator voices, low/mid/high register, click-free chord
+  changes (full jazz chords via Tonal.js).
+- **Progression:** sections with repeats and bar-per-chord spans, driving the
+  drone in sync; now-playing display.
+- **Library:** ~30 built-in progressions and standards (blues, ii–V–I, rhythm
+  changes incl. full AABA, modal, bossa, standards) loadable in one click.
+- **Persistence:** the working song silently auto-saves to localStorage and
+  restores on refresh.
+- **PWA:** installable + offline (web manifest + service worker, registered in
+  production builds).
+
+Deferred (vNext): polyrhythm / stacked meters, setlists (multiple saved songs),
+expanded/sampled sounds, MIDI / Ableton Link, crisp PNG PWA icons.
 
 ## Tech stack
 
@@ -27,11 +36,13 @@ own songs, expanded/sampled sounds, MIDI/Ableton Link, PWA/mobile.
 
 ```
 src/
-  audio/        AudioEngine, scheduler Web Worker, click sound bank, chordEngine (framework-agnostic)
-  state/        domain types + Zustand store
+  audio/        AudioEngine, scheduler Web Worker, click sound bank, chordEngine, drone (framework-agnostic)
+  state/        domain types, Zustand store, progression timeline
+  data/         built-in progression/standards library (presets)
   ui/           React components
-  persistence/  localStorage save/load
+  persistence/  localStorage auto-save / restore
   test/         test setup
+public/         PWA manifest, service worker, icon
 ```
 
 ## Scripts
@@ -44,12 +55,23 @@ npm run test:run   # run tests once
 npm run lint       # lint
 ```
 
-## Roadmap (high level)
+## Resuming development
 
-1. **Core metronome** (the heart): BPM, tap tempo, time signatures (incl. odd/compound), subdivisions, custom per-beat accent patterns, sound bank, visual metronome.
-2. **Pocket trainers**: gap/mute trainer, tempo automation.
-3. **Chord drone**: oscillator voices, low/mid/high register, click-free chord transitions.
-4. **Progression & sections**: chord spans with bar counts, repeats; drone follows the bars.
-5. **Persistence & polish**: save/load song, cross-browser pass.
+```bash
+git clone https://github.com/pedrommeirelles/metronome.git
+cd metronome
+npm install
+npm run dev          # http://localhost:5173
+```
 
-Deferred to a later version: polyrhythm/stacked meters, setlists, expanded/sampled sounds, MIDI/Ableton Link, PWA/mobile.
+Verify a clean checkout with `npm run test:run` (should be all green) and
+`npm run build`. To exercise the PWA (install + offline), use a production
+build: `npm run build && npm run preview`.
+
+**Architecture in one line:** a framework-agnostic `AudioEngine` (one lookahead
+scheduler on a single AudioContext clock) drives clicks, trainers, and the
+drone; React only subscribes via the Zustand store and never touches Web Audio.
+
+**Possible next steps (vNext):** polyrhythm / stacked meters, setlists (multiple
+saved songs), expanded/sampled sounds, MIDI / Ableton Link, crisp PNG PWA icons
+for the best install prompt.
