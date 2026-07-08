@@ -1,0 +1,21 @@
+HOW TO RUN THE METRONOME APP
+============================
+
+1. Open the Terminal app.
+
+2. Go to this folder. The easiest way: type "cd " (with a space),
+   drag this folder from Finder into the Terminal window, and press Enter.
+
+3. Run:
+
+   ./run.sh
+
+That's it. The app opens automatically in your browser at
+http://localhost:5173
+
+To stop the app, go back to the Terminal window and press Ctrl+C.
+
+Notes:
+- The first time you run it, it will install dependencies (takes a minute).
+- If the browser opens before the app is ready, just refresh the page.
+- Requirement: Node.js must be installed (it already is on this Mac).
