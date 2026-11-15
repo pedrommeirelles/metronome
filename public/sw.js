@@ -2,8 +2,8 @@
 // everything cache-first (caching new hashed assets as they're fetched).
 // Navigations are network-first with an offline fallback to the cached shell.
 
-const CACHE = 'metronome-v1'
-const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg']
+const CACHE = 'metronome-v2'
+const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -33,7 +33,7 @@ self.addEventListener('fetch', (event) => {
   // SPA navigations: try the network, fall back to the cached shell offline.
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match('/index.html')),
+      fetch(request).catch(() => caches.match('./index.html')),
     )
     return
   }
